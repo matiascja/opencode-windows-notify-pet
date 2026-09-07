@@ -1,0 +1,13 @@
+{
+  "name": "opencode-windows-notify-pet",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.17.1",
+    "@types/bun": "1.2.23",
+    "typescript": "5.9.2"
+  }
+}

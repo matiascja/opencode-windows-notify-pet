@@ -1,0 +1,79 @@
+{
+  "clippit": {
+    "displayName": "Clippy",
+    "phrases": [
+      "¿Necesitas ayuda? Ya terminé.",
+      "Parece que estás escribiendo... nada, ya acabé."
+    ]
+  },
+  "wall-e": {
+    "displayName": "Wall-E",
+    "phrases": [
+      "Directiva completada.",
+      "EVE estaría orgullosa. Terminé."
+    ]
+  },
+  "einstein": {
+    "displayName": "Einstein",
+    "phrases": [
+      "La relatividad dice que terminé.",
+      "E=mc², tarea completada."
+    ]
+  },
+  "dogeknight": {
+    "displayName": "DogeKnight",
+    "phrases": [
+      "Much done, very terminé.",
+      "Wow. Tarea lista."
+    ]
+  },
+  "rick": {
+    "displayName": "Rick",
+    "phrases": [
+      "Wubba lubba dub dub, listo.",
+      "*burp* ya terminé, Morty."
+    ]
+  },
+  "nori": {
+    "displayName": "Nori",
+    "phrases": [
+      "Un roll de sushi, tarea lista.",
+      "Nori feliz, tarea terminada."
+    ]
+  },
+  "snoopy": {
+    "displayName": "Snoopy",
+    "phrases": [
+      "Tarea terminada, buen chico.",
+      "A dormir sobre la caseta. Listo."
+    ]
+  },
+  "pepe": {
+    "displayName": "Pepe",
+    "phrases": [
+      "Feels good man, terminé.",
+      "Sad frog, happy ending. Listo."
+    ]
+  },
+  "buff-patrick": {
+    "displayName": "Buff Patrick",
+    "phrases": [
+      "Fuerza bruta, tarea lista.",
+      "Firmeza absoluta. Terminé."
+    ]
+  },
+  "nezukocoder": {
+    "displayName": "NezukoCoder",
+    "phrases": [
+      "Modo demonio activado... y terminado.",
+      "Nezuko aprueba este código."
+    ]
+  },
+  "dobby": {
+    "displayName": "Dobby",
+    "phrases": [
+      "Dobby ha terminado la tarea.",
+      "Dobby es libre... de esta tarea."
+    ]
+  }
+}
