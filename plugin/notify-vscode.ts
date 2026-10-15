@@ -472,4 +472,79 @@ try {
   }
 }
 
-export default NotifyVscodePlugin
+// Structural types keep the V1 entrypoint usable without installing V2 packages.
+type V2NotifyContext = {
+  location: { directory: string; workspaceID?: string }
+  session: {
+    get(input: { sessionID: string }): Promise<any>
+    context(input: { sessionID: string }): Promise<any>
+  }
+  event: { subscribe(input: { signal: AbortSignal }): AsyncIterable<any> }
+}
+
+export async function setupNotifyV2(ctx: V2NotifyContext) {
+  const abort = new AbortController()
+  const directory = ctx.location.directory
+  const hooks = await NotifyVscodePlugin({
+    client: {
+      app: { log: async ({ body }: any) => console.log(`[notify-vscode] ${body.message}`) },
+      session: {
+        async get({ path }: any) {
+          const session = await ctx.session.get({ sessionID: path.id })
+          // The V2 server shares events across projects. Never disclose another
+          // location's title or prompt through this plugin instance.
+          if (session.location?.directory !== directory ||
+              session.location?.workspaceID !== ctx.location.workspaceID) {
+            throw new Error("Session belongs to another location")
+          }
+          return { data: session }
+        },
+        async messages({ path }: any) {
+          const result = await ctx.session.context({ sessionID: path.id })
+          const messages = Array.isArray(result) ? result : result.messages ?? result.data ?? []
+          return { data: messages.filter((message: any) => message.type === "user").map((message: any) => ({
+            info: { role: "user" }, parts: [{ type: "text", text: message.text ?? "" }],
+          })) }
+        },
+      },
+    },
+  } as any)
+
+  const listening = (async () => {
+    const lastIdle = new Set<string>()
+    try {
+      for await (const event of ctx.event.subscribe({ signal: abort.signal })) {
+        if (abort.signal.aborted) break
+        if (event.location && (event.location.directory !== directory ||
+            event.location.workspaceID !== ctx.location.workspaceID)) continue
+        const data = event.type === "form.created" ? event.data?.form ?? {} : event.data ?? {}
+        if (!data.sessionID) continue
+        let type = event.type === "form.created" ? "question.asked" : event.type
+        // V2 emits status transitions; some releases also emit deprecated idle.
+        // Handle both without notifying twice for the same completed turn.
+        if (type === "session.status") {
+          if (data.status?.type !== "idle") { lastIdle.delete(data.sessionID); continue }
+          type = "session.idle"
+        }
+        if (type === "session.idle") {
+          if (lastIdle.has(data.sessionID)) continue
+          lastIdle.add(data.sessionID)
+        }
+        if (type === "session.deleted") lastIdle.delete(data.sessionID)
+        const properties = event.type === "session.created" || event.type === "session.deleted"
+          ? { info: { id: data.sessionID, parentID: data.parentID } }
+          : data
+        try {
+          await hooks.event?.({ event: { type, properties } } as any)
+        } catch (error) {
+          console.error("[notify-vscode] event failed:", error)
+        }
+      }
+    } catch (error) {
+      if (!abort.signal.aborted) console.error("[notify-vscode] event stream failed:", error)
+    }
+  })()
+  return async () => { abort.abort(); await listening }
+}
+
+export default { id: "notify-vscode", server: NotifyVscodePlugin, setup: setupNotifyV2 }
