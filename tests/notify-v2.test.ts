@@ -52,3 +52,32 @@ test("translates V2 events, filters locations/subagents and deduplicates idle", 
   expect(commands.filter(args => args.includes("-Command"))).toHaveLength(6)
   expect(commands.some(args => args.join(" ").includes("Latest prompt"))).toBe(true)
 })
+
+test("notifies once per turn from OpenCode 2.0.29 execution events", async () => {
+  const commands: string[][] = []
+  Bun.spawn = ((args: string[]) => {
+    commands.push(args)
+    return { exited: Promise.resolve(0), stderr: new ReadableStream({ start(c) { c.close() } }) }
+  }) as typeof Bun.spawn
+  const location = { directory: "C:\\project" }
+  const execution = (kind: string) => ({ type: `session.execution.${kind}`, data: { sessionID: "main" } })
+  // 2.0.29 can deliver the same terminal event several times; interruptions are not completions.
+  const events = [
+    execution("started"), execution("succeeded"), execution("succeeded"),
+    execution("started"), execution("failed"), execution("failed"),
+    execution("started"), execution("interrupted"),
+  ]
+  const cleanup = await setupNotifyV2({
+    location,
+    session: {
+      get: async ({ sessionID }) => ({ id: sessionID, title: "Test session", location }),
+      context: async () => [{ type: "user", text: "Latest prompt" }],
+    },
+    event: { subscribe: async function* () { for (const event of events) yield event } },
+  })
+  await new Promise(resolve => setTimeout(resolve, 50))
+  await cleanup()
+  if (process.platform !== "win32") return
+  // Two completions (succeeded, failed), each toast+flash.
+  expect(commands.filter(args => args.includes("-Command"))).toHaveLength(4)
+})

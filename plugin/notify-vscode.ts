@@ -33,6 +33,8 @@
 
 import type { Plugin } from "@opencode-ai/plugin"
 import path from "path"
+import { appendFile } from "node:fs/promises"
+import { homedir } from "node:os"
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -482,12 +484,22 @@ type V2NotifyContext = {
   event: { subscribe(input: { signal: AbortSignal }): AsyncIterable<any> }
 }
 
+// V2 does not route plugin console output to opencode.log, so keep a small
+// dedicated log next to it for diagnosing missed notifications.
+const V2_LOG_PATH = path.join(homedir(), ".local", "share", "opencode", "log", "notify-vscode.log")
+
+function logV2(message: string, extra?: Record<string, unknown>) {
+  const line = `${new Date().toISOString()} ${message}${extra ? " " + JSON.stringify(extra) : ""}\n`
+  appendFile(V2_LOG_PATH, line).catch(() => {})
+}
+
 export async function setupNotifyV2(ctx: V2NotifyContext) {
   const abort = new AbortController()
   const directory = ctx.location.directory
+  logV2("setup", { directory, pet: PET_ENABLED })
   const hooks = await NotifyVscodePlugin({
     client: {
-      app: { log: async ({ body }: any) => console.log(`[notify-vscode] ${body.message}`) },
+      app: { log: async ({ body }: any) => logV2(body.message, body.extra) },
       session: {
         async get({ path }: any) {
           const session = await ctx.session.get({ sessionID: path.id })
@@ -512,16 +524,29 @@ export async function setupNotifyV2(ctx: V2NotifyContext) {
 
   const listening = (async () => {
     const lastIdle = new Set<string>()
+    let seen = 0
     try {
+      logV2("subscribing")
       for await (const event of ctx.event.subscribe({ signal: abort.signal })) {
         if (abort.signal.aborted) break
+        // Log the first events and every relevant one so a silent stream is visible.
+        if (seen++ < 5 || /^(session\.(status|idle|execution\.)|form\.|permission\.)/.test(event.type)) {
+          logV2("event", { type: event.type, dir: event.location?.directory, sessionID: event.data?.sessionID })
+        }
         if (event.location && (event.location.directory !== directory ||
             event.location.workspaceID !== ctx.location.workspaceID)) continue
         const data = event.type === "form.created" ? event.data?.form ?? {} : event.data ?? {}
         if (!data.sessionID) continue
         let type = event.type === "form.created" ? "question.asked" : event.type
-        // V2 emits status transitions; some releases also emit deprecated idle.
-        // Handle both without notifying twice for the same completed turn.
+        // OpenCode 2.0.29 does not publish session.status/session.idle to plugins.
+        // A turn ends with session.execution.{succeeded,failed}; V1 also fired idle
+        // after errors. User interruptions are skipped on purpose.
+        if (type === "session.execution.started") { lastIdle.delete(data.sessionID); continue }
+        if (type === "session.execution.succeeded" || type === "session.execution.failed") {
+          type = "session.idle"
+        }
+        // Older V2 releases emit status transitions or the deprecated idle event.
+        // Handle all of them without notifying twice for the same completed turn.
         if (type === "session.status") {
           if (data.status?.type !== "idle") { lastIdle.delete(data.sessionID); continue }
           type = "session.idle"
@@ -537,11 +562,11 @@ export async function setupNotifyV2(ctx: V2NotifyContext) {
         try {
           await hooks.event?.({ event: { type, properties } } as any)
         } catch (error) {
-          console.error("[notify-vscode] event failed:", error)
+          logV2("event failed", { error: String(error) })
         }
       }
     } catch (error) {
-      if (!abort.signal.aborted) console.error("[notify-vscode] event stream failed:", error)
+      if (!abort.signal.aborted) logV2("event stream failed", { error: String(error) })
     }
   })()
   return async () => { abort.abort(); await listening }
