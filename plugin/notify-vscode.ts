@@ -99,7 +99,7 @@ export const NotifyVscodePlugin: Plugin = async ({ client }) => {
     try {
       const proc = Bun.spawn(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-        { stdout: "ignore", stderr: "pipe", stdin: "ignore" },
+        { stdout: "ignore", stderr: "pipe", stdin: "ignore", windowsHide: true },
       )
       const exitCode = await proc.exited
       if (exitCode !== 0) {
@@ -253,7 +253,7 @@ try {
           message,
           String(PET_DURATION_MS),
         ],
-        { stdout: "ignore", stderr: "pipe", stdin: "ignore" },
+        { stdout: "ignore", stderr: "pipe", stdin: "ignore", windowsHide: true },
       )
       const exitCode = await proc.exited
       if (exitCode !== 0) {
